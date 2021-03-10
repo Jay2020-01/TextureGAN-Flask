@@ -41,6 +41,12 @@ def pil_loader(path):
             return img.convert('RGB')
 
 
+def pil_loader1(imagebytes):
+    # open path as file to avoid ResourceWarning (https://github.com/python-pillow/Pillow/issues/835)
+    with Image.open(imagebytes) as img:
+        return img.convert('RGB')
+
+
 def load_network(model, save_path):
     model_state = torch.load(save_path)
 
@@ -110,22 +116,26 @@ CORS(app)  # 解决跨域问题
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(device)
 
+command = '--display_port 7770 --load 0 --load_D -1 --load_epoch 105 --gpu 2 --model texturegan --feature_weight 1e2 --pixel_weight_ab 1e3 --global_pixel_weight_l 1e3 --local_pixel_weight_l 0 --style_weight 0 --discriminator_weight 1e3 --discriminator_local_weight 1e6  --learning_rate 1e-4 --learning_rate_D 1e-4 --batch_size 36 --save_every 50 --num_epoch 100000 --save_dir /home/psangkloy3/skip_leather_re/ --load_dir /home/psangkloy3/skip_leather_re/ --data_path ../../training_handbags_pretrain/ --learning_rate_D_local  1e-4 --local_texture_size 50 --patch_size_min 20 --patch_size_max 40 --num_input_texture_patch 1 --visualize_every 5 --num_local_texture_patch 1'
+args = parse_arguments(command.split())
 
-def get_prediction(image_bytes, pos_x, pos_y):
+args.batch_size = 1
+args.image_size = 256
+args.resize_max = 256
+args.resize_min = 256
+# args.data_path = '/home/psangkloy3/training_handbags_pretrain/' #change to your data path
+args.data_path = '/media/jay2019/DATA/Study/8.创新杯/3.现有代码/clothes_data/clothes_data'
+
+
+# args.data_path = './dataset/training_handbags_pretrain'
+# args.data_path = './dataset/training_shoes_pretrain'
+# args.data_path = './dataset/j_test_shoes'
+
+
+def get_prediction(image_bytes, txt_bytes, pos_x, pos_y):
     try:
         # code for TextureGAN
-        command = '--display_port 7770 --load 0 --load_D -1 --load_epoch 105 --gpu 2 --model texturegan --feature_weight 1e2 --pixel_weight_ab 1e3 --global_pixel_weight_l 1e3 --local_pixel_weight_l 0 --style_weight 0 --discriminator_weight 1e3 --discriminator_local_weight 1e6  --learning_rate 1e-4 --learning_rate_D 1e-4 --batch_size 36 --save_every 50 --num_epoch 100000 --save_dir /home/psangkloy3/skip_leather_re/ --load_dir /home/psangkloy3/skip_leather_re/ --data_path ../../training_handbags_pretrain/ --learning_rate_D_local  1e-4 --local_texture_size 50 --patch_size_min 20 --patch_size_max 40 --num_input_texture_patch 1 --visualize_every 5 --num_local_texture_patch 1'
-        args = parse_arguments(command.split())
 
-        args.batch_size = 1
-        args.image_size = 256
-        args.resize_max = 256
-        args.resize_min = 256
-        # args.data_path = '/home/psangkloy3/training_handbags_pretrain/' #change to your data path
-        args.data_path = '/media/jay2019/DATA/Study/8.创新杯/3.现有代码/clothes_data/clothes_data'
-        # args.data_path = './dataset/training_handbags_pretrain'
-        # args.data_path = './dataset/training_shoes_pretrain'
-        # args.data_path = './dataset/j_test_shoes'
 
         transform = get_transforms(args)
         # val = make_dataset(args.data_path, 'val')
@@ -135,15 +145,17 @@ def get_prediction(image_bytes, pos_x, pos_y):
         # new load data
         # img_path = "./dataset/test/img.jpg"
         img_path = image_bytes
-        skg_path = "./dataset/test/skg.jpg"
+        # skg_path = "./dataset/test/skg.jpg"
+        skg_path = image_bytes
         seg_path = "./dataset/test/seg.jpg"
         eroded_seg_path = "./dataset/test/eroded_seg.jpg"
-        txt_path = "./dataset/test/txt.jpg"
+        # txt_path = "./dataset/test/txt.jpg"
+        txt_path = txt_bytes
 
-        img = pil_loader(img_path)
-        skg = pil_loader(skg_path)
+        img = pil_loader1(img_path)
+        skg = pil_loader1(skg_path)
         seg = pil_loader(seg_path)
-        txt = pil_loader(txt_path)
+        txt = pil_loader1(txt_path)
         eroded_seg = pil_loader(eroded_seg_path)
         img, skg, seg, eroded_seg, txt = transform([img, skg, seg, eroded_seg, txt])
         img = img.unsqueeze(0)
@@ -154,7 +166,7 @@ def get_prediction(image_bytes, pos_x, pos_y):
         data = [img, skg, seg, eroded_seg, txt]
 
         # load model
-        model_location = '/media/jay2019/DATA/Study/8.创新杯/3.现有代码/TextureGAN_data/pretrained_models/3.2_6/G_net_texturegan_18_300.pth'
+        model_location = '../../TextureGAN_data/pretrained_models/3.2_6/G_net_texturegan_18_300.pth'
         netG = texturegan.TextureGAN(5, 3, 32)
         load_network(netG, model_location)
         netG.eval()
@@ -166,14 +178,14 @@ def get_prediction(image_bytes, pos_x, pos_y):
         color_space = 'lab'
 
         img, skg, seg, eroded_seg, txt = data
-        print(txt.size())
+        # print(txt.size())
         img = custom_transforms.normalize_lab(img)
         skg = custom_transforms.normalize_lab(skg)
         txt = custom_transforms.normalize_lab(txt)
         seg = custom_transforms.normalize_seg(seg)
         eroded_seg = custom_transforms.normalize_seg(eroded_seg)
 
-        inp, texture_loc = get_input(data, 100, 100, 50, 1)
+        inp, texture_loc = get_input(data, pos_x, pos_y, 50, 1)
 
         seg = seg != 0
 
@@ -191,15 +203,19 @@ def get_prediction(image_bytes, pos_x, pos_y):
         tar_img = vis_image(custom_transforms.denormalize_lab(img.cpu()),
                             color_space)
 
-        plt.figure()
-        plt.imshow(np.transpose(inp_img[0], (1, 2, 0)))
-        # plt.axis('off')
         # plt.figure()
-        plt.figure()
-        plt.imshow(np.transpose(out_img[0], (1, 2, 0)))
-        plt.show()
+        # plt.imshow(np.transpose(inp_img[0], (1, 2, 0)))
+        # plt.imsave("./out_img.jpg", np.transpose(out_img[0], (1, 2, 0)))
+        # # plt.axis('off')
+        # # plt.figure()
+        # plt.figure()
+        # plt.imshow(np.transpose(out_img[0], (1, 2, 0)))
+        # plt.show()
+        inp_img = np.transpose(inp_img[0], (1, 2, 0))
+        out_img = np.transpose(out_img[0], (1, 2, 0))
         return out_img
     except Exception as e:
+        print("error!!!!!!!!!!!!")
         return inp_img
 
 
@@ -207,19 +223,24 @@ def get_prediction(image_bytes, pos_x, pos_y):
 @torch.no_grad()
 def predict():
     image_link = request.form.get("imageLink")  # 传入sketch图片url
-    pos_x = request.form.get("x")  # 传入x坐标
-    pos_y = request.form.get("y")  # 传入y坐标
+    txt_link = request.form.get("txtLink")  # 传入texture图片url
+    pos_x = request.form.get("x", type=int)  # 传入x坐标
+    pos_y = request.form.get("y", type=int)  # 传入y坐标
 
     response = req.get(image_link)
     img_bytes = BytesIO(response.content)
 
-    image_array = get_prediction(image_bytes=img_bytes, pos_x=pos_x, pos_y=pos_y)
+    response = req.get(txt_link)
+    txt_bytes = BytesIO(response.content)
 
-    img = Image.fromarray(image_array, 'RGB')
-    img_byte_array = io.BytesIO()
-    img.save(img_byte_array, format='JPEG')
+    image_array = get_prediction(image_bytes=img_bytes, txt_bytes=txt_bytes, pos_x=pos_x, pos_y=pos_y)
 
-    image_info = base64.b64encode(img_byte_array.getvalue()).decode('ascii')
+    img = Image.fromarray(np.uint8(image_array * 255))
+    output_buffer = BytesIO()
+    img.save(output_buffer, format='JPEG')
+    byte_data = output_buffer.getvalue()
+    image_info = base64.b64encode(byte_data)
+
     return image_info
 
 
