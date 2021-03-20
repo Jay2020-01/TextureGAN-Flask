@@ -147,8 +147,8 @@ def get_prediction(image_bytes, txt_bytes, pos_x, pos_y):
         img_path = image_bytes
         # skg_path = "./dataset/test/skg.jpg"
         skg_path = image_bytes
-        seg_path = "./dataset/test/seg.jpg"
-        eroded_seg_path = "./dataset/test/eroded_seg.jpg"
+        seg_path = "./dataset/test/blank.jpg"
+        eroded_seg_path = seg_path
         # txt_path = "./dataset/test/txt.jpg"
         txt_path = txt_bytes
 
@@ -166,7 +166,7 @@ def get_prediction(image_bytes, txt_bytes, pos_x, pos_y):
         data = [img, skg, seg, eroded_seg, txt]
 
         # load model
-        model_location = '../../TextureGAN_data/pretrained_models/3.2_6/G_net_texturegan_18_300.pth'
+        model_location = './pretrained_models/G_net_texturegan_18_300.pth'
         netG = texturegan.TextureGAN(5, 3, 32)
         load_network(netG, model_location)
         netG.eval()
